@@ -13,8 +13,10 @@ import streamlit as st
 
 # Optional lottie support (graceful fallback)
 try:
-    from streamlit_lottie import st_lottie  # type: ignore
-    LOTTIE_AVAILABLE = True
+    def load_lottie_json(path: str):
+    import json
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 except Exception:
     st_lottie = None
     LOTTIE_AVAILABLE = False
@@ -366,8 +368,9 @@ with tabs[0]:
         # Lottie (optional)
         if LOTTIE_AVAILABLE:
             try:
-                lottie_url = "https://assets9.lottiefiles.com/packages/lf20_qp1q7mct.json"
-                st_lottie(st.session_state.get("lottie_cache", st.cache_data(lambda: __import__("requests").get(lottie_url).json())()), height=180)
+                welcome_anim = load_lottie("lotties/welcome.json")  
+                if welcome_anim:
+                    st_lottie(welcome_anim, height=200, key="welcome")
             except Exception:
                 pass
         st.markdown("### Quick-start templates")
