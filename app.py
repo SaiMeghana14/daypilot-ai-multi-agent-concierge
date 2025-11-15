@@ -59,17 +59,27 @@ def load_long_term_memory() -> dict:
 # ---------- Memory (Session + Long-Term) ----------
 class SessionMemory:
     def __init__(self):
+        # Load from long-term memory first
+        ltm = load_long_term_memory()
+
         self.store = {
-            "preferred_wakeup": "7:00 AM",
-            "work_style": "Pomodoro",
-            "planning_format": "list",
-            "last_plan": None,
-            "profile": "Student",
+            "preferred_wakeup": ltm.get("preferred_wakeup", ""),
+            "work_style": ltm.get("work_style", ""),
+            "planning_format": ltm.get("planning_format", ""),
+            "last_plan": ltm.get("last_plan", None),
+            "profile": ltm.get("profile", ""),
         }
-    def get(self, key: str, default=None):
+
+    def get(self, key, default=None):
         return self.store.get(key, default)
-    def set(self, key: str, value):
+
+    def set(self, key, value):
         self.store[key] = value
+        # save to long-term memory immediately
+        ltm = load_long_term_memory()
+        ltm[key] = value
+        save_long_term_memory(ltm)
+
     def dump(self):
         return dict(self.store)
 
@@ -380,7 +390,7 @@ with tabs[0]:
             st.write(st.session_state.user_template)
         if st.button("🚀 Start Planning"):
             st.session_state.show_intro = False
-            st.experimental_rerun()
+            st.rerun()
     else:
         st.success("You're ready — open the Agents tab and run the pipeline.")
 
@@ -412,24 +422,49 @@ with tabs[1]:
                 st.error("Unable to transcribe audio.")
 
         st.markdown("### Profile & Preferences")
-        profile = st.selectbox("Profile", options=["Student", "Developer", "Researcher", "Designer"], index=0)
+        # Load saved profile (persistent)
+        saved_profile = session_memory.get("profile", "Student")
+        
+        profile = st.selectbox(
+            "Profile",
+            options=["Student", "Developer", "Researcher", "Designer"],
+            index=["Student", "Developer", "Researcher", "Designer"].index(saved_profile)
+        )
+        
+        # Avatar icons
         avatars = {
-        "Student": "🎓",
-        "Developer": "💻",
-        "Designer": "🎨",
-        "Researcher": "🔬"
-    }
+            "Student": "🎓",
+            "Developer": "💻",
+            "Designer": "🎨",
+            "Researcher": "🔬"
+        }
+        
         st.markdown(f"### {avatars.get(profile, '🙂')} {profile} Mode Activated")
-
-        wake = st.text_input("Preferred wakeup time", value=session_memory.get("preferred_wakeup"))
-        style = st.selectbox("Work style", options=["Pomodoro", "Continuous", "Custom"], index=0)
+        
+        # Wakeup time (loaded from persistent memory)
+        wake = st.text_input("Preferred wakeup time", value=session_memory.get("preferred_wakeup", ""))
+        
+        # Work style (loaded from memory)
+        saved_style = session_memory.get("work_style", "Pomodoro")
+        style = st.selectbox(
+            "Work style",
+            options=["Pomodoro", "Continuous", "Custom"],
+            index=["Pomodoro", "Continuous", "Custom"].index(saved_style)
+        )
+        
+        # Loop cycles
         cycles = st.slider("Refinement cycles (loop agent)", min_value=1, max_value=4, value=2)
+        
+        # Run button
         run_btn = st.button("Run Agents")
+        
+        # Save button
         if st.button("Save Preferences"):
             session_memory.set("preferred_wakeup", wake)
             session_memory.set("work_style", style)
             session_memory.set("profile", profile)
-            st.success("Preferences saved to session memory.")
+            st.success("Preferences saved to session + long-term memory.")
+
         st.markdown("---")
         if st.button("🎉 Celebrate last run"):
             st.balloons()
