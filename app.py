@@ -5,9 +5,19 @@ import traceback
 from datetime import datetime
 from typing import Dict, Optional, Any, List
 from pathlib import Path
+
+# import UI helpers you created
 from ui_style import render_header, theme_toggle, show_badges, icons, animated_text, inject_css
 
 import streamlit as st
+
+# Optional lottie support (graceful fallback)
+try:
+    from streamlit_lottie import st_lottie  # type: ignore
+    LOTTIE_AVAILABLE = True
+except Exception:
+    st_lottie = None
+    LOTTIE_AVAILABLE = False
 
 # Try to import google.generativeai but don't crash if unavailable
 try:
@@ -73,14 +83,12 @@ class SessionMemory:
 
 session_memory = SessionMemory()
 
-# Apply UI styling (CSS + Header + Theme)
+# Apply UI styling and header (must be after session memory exists)
 inject_css()
 render_header()
 
-# Theme toggle must come early
+# Theme toggle and badges
 mode = theme_toggle()
-
-# Show badges (profile, model, mode)
 show_badges(session_memory.get("profile"), PREFERRED_MODEL, FORCE_OFFLINE)
 
 long_term_memory = load_long_term_memory()  # dict persisted to disk
@@ -120,14 +128,12 @@ class LLMEngine:
         if self.force_offline:
             return self.fake_llm(prompt)
         try:
-            # Primary attempt
             model_name = self.active_model or self.preferred_model
             response = genai.GenerativeModel(model_name).generate_content(prompt)
             if hasattr(response, "text"):
                 return response.text
             return str(response)
         except Exception:
-            # fallback
             try:
                 fallback = "models/text-bison-001"
                 response = genai.GenerativeModel(fallback).generate_content(prompt)
@@ -139,7 +145,6 @@ class LLMEngine:
                 self.force_offline = True
                 return self.fake_llm(prompt)
 
-    # A slightly more capable fake LLM to simulate responses across agents
     @staticmethod
     def fake_llm(prompt: str) -> str:
         text = prompt.lower()
@@ -181,27 +186,22 @@ def search_tool(query: str, logs: list) -> str:
     safe_log(logs, "SearchTool", f"Querying: {query}")
     if llm_engine.force_offline:
         return f"FAKE SEARCH: top resources for '{query}': quick tutorial, official docs, example notebook."
-    # if LLM is live, we can call LLM to behave like a search responder
     prompt = f"Execution Agent: act as a web search summarizer for: {query}\nReturn short resource list."
     return llm_engine.generate(prompt)
 
 def code_tool(expression: str, logs: list) -> str:
     safe_log(logs, "CodeTool", f"Eval request: {expression}")
-    # safe limited evaluation: arithmetic and simple parsing
     try:
-        # literal_eval for safety
         import ast
         val = ast.literal_eval(expression)
         return f"CodeTool result: {val}"
     except Exception:
-        # last resort: do not execute arbitrary code; return simulated result
         return "CodeTool: unable to evaluate expression safely (demo mode)."
 
 # ---------- Context Compaction Agent ----------
 def context_compaction(history: List[str], logs: list) -> str:
     safe_log(logs, "ContextCompaction", "Activated")
-    # basic compaction: keep only last N entries and summarize via LLM or simulated method
-    relevant = "\n".join(history[-6:])  # keep last 6 turns
+    relevant = "\n".join(history[-6:])
     prompt = f"Context Compaction\nCompact these lines into compact facts:\n{relevant}"
     compacted = llm_engine.generate(prompt)
     safe_log(logs, "ContextCompaction", "Completed")
@@ -215,7 +215,6 @@ def tool_router(plan_text: str, logs: list) -> Dict[str, bool]:
         "search": ("needs_search: true" in plan_lower) or ("needs_search: yes" in plan_lower),
         "code": ("needs_code: true" in plan_lower) or ("needs_code: yes" in plan_lower)
     }
-    # heuristics: if plan mentions "resource" or "tutorial" => search
     if ("resource" in plan_lower or "tutorial" in plan_lower) and not uses["search"]:
         uses["search"] = True
     safe_log(logs, "ToolRouter", f"Decided tools: {uses}")
@@ -224,21 +223,15 @@ def tool_router(plan_text: str, logs: list) -> Dict[str, bool]:
 # ---------- Agent Evaluation (simple scoring) ----------
 def evaluate_plan(plan_text: str, exec_output: str, logs: list) -> dict:
     safe_log(logs, "Evaluator", "Scoring plan")
-    # heuristics for scoring: length, presence of steps, tool usage
     score = 0
-    # clarity: presence of numeric steps or bullets
     if any(tok in plan_text.lower() for tok in ["1)", "-", "step"]):
         score += 40
-    # relevance: mentions topics from user input (estimated via length here)
     if len(plan_text) < 800:
         score += 20
-    # execution usefulness:
     if "Search results:" in exec_output or "Suggested" in exec_output:
         score += 30
     else:
         score += 10
-    # bonus for memory persistence usage
-    score += 0
     final = min(score, 100)
     safe_log(logs, "Evaluator", f"Score computed: {final}")
     return {"score": final, "components": {"clarity": 40, "conciseness": 20, "usefulness": 40}}
@@ -265,7 +258,6 @@ def executor_agent(plan_text: str, logs: list) -> dict:
         res = search_tool("best resources for plan: " + plan_text[:200], logs)
         results.append("Search results:\n" + res)
     if router.get("code"):
-        # simple simulated code execution e.g., time parsing
         res = code_tool("2+2", logs)
         results.append(res)
     if not results:
@@ -296,13 +288,11 @@ Analyze the plan and summary. Propose at most 3 improvements, add a contingency 
 Summary: {summary_text}"""
     out = llm_engine.generate(prompt)
     msg = make_a2a("ReflectionAgent", "User", {"reflection": out})
-    # optionally update long-term memory: store improvements
     long_term_memory.setdefault("improvements", []).append({"timestamp": now_ts(), "text": out})
     save_long_term_memory(long_term_memory)
     safe_log(logs, "Reflection", "Completed and saved suggestions to long-term memory")
     return {"a2a": msg, "reflection": out}
 
-# ---------- Loop Agent (autonomous multi-cycle refinement) ----------
 def loop_orchestrator(user_input: str, cycles: int, logs: list) -> dict:
     safe_log(logs, "Loop", f"Starting loop with cycles={cycles}")
     start = time.time()
@@ -311,7 +301,6 @@ def loop_orchestrator(user_input: str, cycles: int, logs: list) -> dict:
     plan_text, exec_output, summary_text, final_reflection = "", "", "", ""
     for i in range(max(1, cycles)):
         safe_log(logs, "Loop", f"Cycle {i+1} begin")
-        # compact context from history
         if history:
             compact_ctx = context_compaction(history, logs)
         planner_out = planner_agent(user_input, logs, compact_ctx)
@@ -323,20 +312,16 @@ def loop_orchestrator(user_input: str, cycles: int, logs: list) -> dict:
         summed = summarizer_agent(user_input, plan_text, exec_output, logs)
         summary_text = summed["summary"]
         history.append(summary_text)
-        # small improvement step: reflection after each cycle (could be only after last)
         ref = reflection_agent(summary_text, logs)
         final_reflection = ref["reflection"]
         history.append(final_reflection)
         safe_log(logs, "Loop", f"Cycle {i+1} end")
-        # optionally adapt user_input or session_memory based on reflection — minimal here
-        # small delay to simulate processing
         time.sleep(0.2)
     duration = time.time() - start
     metrics["runs"] += 1
     metrics["last_run_duration_s"] = duration
     metrics["avg_cycles"] = ((metrics.get("avg_cycles", 0.0) * (metrics["runs"] - 1)) + cycles) / metrics["runs"]
     safe_log(logs, "Loop", f"Completed {cycles} cycles in {duration:.2f}s")
-    # Evaluate the final plan
     eval_res = evaluate_plan(summary_text, exec_output, logs)
     metrics["last_score"] = eval_res["score"]
     return {
@@ -347,117 +332,280 @@ def loop_orchestrator(user_input: str, cycles: int, logs: list) -> dict:
         "evaluation": eval_res
     }
 
-# ---------- Streamlit UI ----------
-# layout: left inputs, center outputs, right observability
-col1, col2, col3 = st.columns([3, 4, 3])
+# ------------------ NEW UI: Onboarding & Tabs & Sidebar ------------------
+# Onboarding
+if "show_intro" not in st.session_state:
+    st.session_state.show_intro = True
 
-with col1:
-    st.markdown("## 🧭 User Input")
-    user_input = st.text_area("Describe your goal for today (brief):",
-                              value="I have 6 hours today. Help me plan a productive study schedule for AI and IoT.")
-    st.markdown("### Profile & Preferences")
-    profile = st.selectbox("Profile", options=["Student", "Developer", "Researcher", "Designer"], index=0)
-    wake = st.text_input("Preferred wakeup time", value=session_memory.get("preferred_wakeup"))
-    style = st.selectbox("Work style", options=["Pomodoro", "Continuous", "Custom"], index=0)
-    cycles = st.slider("Refinement cycles (loop agent)", min_value=1, max_value=4, value=2)
-    run_btn = st.button("Run Agents")
-
-    if st.button("Save Preferences"):
-        session_memory.set("preferred_wakeup", wake)
-        session_memory.set("work_style", style)
-        session_memory.set("profile", profile)
-        st.success("Preferences saved to session memory.")
+# Sidebar tips & controls
+with st.sidebar:
+    st.markdown("## 💡 Quick Tips")
+    st.markdown("- Use templates for a fast start\n- Run 2–3 cycles for best results\n- Save preferences to personalize\n")
+    if st.button("🔄 Reset App (clear session)"):
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
+        st.experimental_rerun()
     st.markdown("---")
-    st.markdown("### Long-term memory controls")
-    if st.button("Clear Long-Term Memory"):
-        long_term_memory.clear()
-        save_long_term_memory(long_term_memory)
-        st.warning("Long-term memory cleared.")
+    st.markdown("## ⚙️ Quick Controls")
+    if st.button("🎯 Example: Study 6h (AI + IoT)"):
+        st.session_state.user_template = "I have 6 hours today. Help me plan a productive study schedule for AI and IoT."
+    if st.button("💼 Example: Workday Focus (8h)"):
+        st.session_state.user_template = "I have 8 hours. Help me plan a focused workday: deep work blocks, meetings, and breaks."
 
-with col2:
-    st.markdown("## 🧠 Agent Outputs")
-    planner_exp = st.expander(f"{icons['planner']} Planner Output", expanded=True)
-    exec_exp = st.expander(f"{icons['executor']} Executor Output", expanded=False)
-    summ_exp = st.expander(f"{icons['summarizer']} Summarizer Output", expanded=False)
-    reflect_exp = st.expander(f"{icons['reflection']} Reflection Output", expanded=False)
-    eval_exp = st.expander(f"{icons['evaluation']} Evaluation", expanded=False)
+# Tabs layout
+tabs = st.tabs(["🏠 Home", "🤖 Agents", "📊 Analytics", "🧠 Memory"])
 
-    with planner_exp:
-        planner_text = st.empty()
-    with exec_exp:
-        exec_text = st.empty()
-    with summ_exp:
-        summ_text = st.empty()
-    with reflect_exp:
-        reflect_text = st.empty()
-    with eval_exp:
-        eval_text = st.empty()
+# Home tab: onboarding + lottie + quick templates
+with tabs[0]:
+    if st.session_state.show_intro:
+        st.markdown("## 👋 Welcome to DayPilot AI")
+        st.markdown(
+            "A multi-agent personal concierge that plans productive days. "
+            "It demonstrates Planner, Executor, Summarizer, Reflection agents, loop refinement, tools, and memory."
+        )
+        # Lottie (optional)
+        if LOTTIE_AVAILABLE:
+            try:
+                lottie_url = "https://assets9.lottiefiles.com/packages/lf20_qp1q7mct.json"
+                st_lottie(st.session_state.get("lottie_cache", st.cache_data(lambda: __import__("requests").get(lottie_url).json())()), height=180)
+            except Exception:
+                pass
+        st.markdown("### Quick-start templates")
+        col_a, col_b, col_c, col_d, col_e = st.columns(5)
+        if "user_template" not in st.session_state:
+            st.session_state.user_template = ""
+        with col_a:
+            if st.button("📌 Study Mode"):
+                st.session_state.user_template = "I have 6 hours today. Help me study AI and IoT with a structured plan."
+        with col_b:
+            if st.button("🏃 Productivity Sprint"):
+                st.session_state.user_template = "I want to complete 3 tasks in 4 hours with Pomodoro style."
+        with col_c:
+            if st.button("🛠️ Project Work"):
+                st.session_state.user_template = "I need a 5-hour schedule to develop a small IoT prototype and test it."
+         with col_d:
+            if st.button("👩🏻‍💻 Coding Bootcamp"):
+                st.session_state.user_template = "Give me a 5-hour coding bootcamp plan."
+         with col_e:
+            if st.button("🎯 Hackathon Prep"):
+                st.session_state.user_template = "Help me prepare for a hackathon in 4 hours."
+        st.markdown("---")
+        if st.session_state.user_template:
+            st.info("Template loaded into the input field. Go to Agents tab to run.")
+            st.write(st.session_state.user_template)
+        if st.button("🚀 Start Planning"):
+            st.session_state.show_intro = False
+            st.experimental_rerun()
+    else:
+        st.success("You're ready — open the Agents tab and run the pipeline.")
 
-with col3:
-    st.markdown("## 📊 Observability & Memory")
-    logs_box = st.empty()
-    st.subheader("Session Memory")
-    mem_box = st.empty()
-    st.subheader("Long-Term Memory Snapshot")
-    ltm_box = st.empty()
-    st.subheader("Metrics")
-    metrics_box = st.empty()
-    st.markdown("---")
-    st.caption("A2A messaging, loop cycles, and evaluations are visible in the logs.")
+# Agents tab: main app (inputs + agents)
+with tabs[1]:
+    col1, col2, col3 = st.columns([3,4,3])
+    with col1:
+        st.markdown("## 🧭 Input & Preferences")
+        user_input = st.text_area(
+        "Describe your goal:",
+        value=st.session_state.get("user_template", "")
+    )
+        st.markdown("### 🎤 Voice Input (Optional)")
+        audio_bytes = st.audio_input("Speak your goal")
+        
+        if audio_bytes:
+            try:
+                transcript = "Voice transcription disabled in offline mode."
+                if GENAI_AVAILABLE and not FORCE_OFFLINE:
+                    # Gemini Speech-to-Text
+                    model = genai.GenerativeModel("gemini-pro")
+                    transcript = model.generate_content(
+                        ["Transcribe this audio:", audio_bytes]
+                    ).text
+                st.success("Voice detected!")
+                st.write("**Transcribed:**", transcript)
+                user_input = transcript   # auto-fill
+            except:
+                st.error("Unable to transcribe audio.")
 
-# prepare session logs
-if "dp_logs" not in st.session_state:
-    st.session_state.dp_logs = []
-if "last_run_time" not in st.session_state:
-    st.session_state.last_run_time = None
+        st.markdown("### Profile & Preferences")
+        profile = st.selectbox("Profile", options=["Student", "Developer", "Researcher", "Designer"], index=0)
+        avatars = {
+        "Student": "🎓",
+        "Developer": "💻",
+        "Designer": "🎨",
+        "Researcher": "🔬"
+    }
+        st.markdown(f"### {avatars.get(profile, '🙂')} {profile} Mode Activated")
 
-# Run pipeline when clicked
-if run_btn:
-    st.session_state.last_run_time = now_ts()
-    st.session_state.dp_logs.clear()
-    try:
-        # store preferences
-        session_memory.set("preferred_wakeup", wake)
-        session_memory.set("work_style", style)
-        session_memory.set("profile", profile)
+        wake = st.text_input("Preferred wakeup time", value=session_memory.get("preferred_wakeup"))
+        style = st.selectbox("Work style", options=["Pomodoro", "Continuous", "Custom"], index=0)
+        cycles = st.slider("Refinement cycles (loop agent)", min_value=1, max_value=4, value=2)
+        run_btn = st.button("Run Agents")
+        if st.button("Save Preferences"):
+            session_memory.set("preferred_wakeup", wake)
+            session_memory.set("work_style", style)
+            session_memory.set("profile", profile)
+            st.success("Preferences saved to session memory.")
+        st.markdown("---")
+        if st.button("🎉 Celebrate last run"):
+            st.balloons()
 
-        safe_log(st.session_state.dp_logs, "Main", f"Starting pipeline for profile={profile}, cycles={cycles}")
-        result = loop_orchestrator(user_input, cycles, st.session_state.dp_logs)
+    with col2:
+        st.markdown("## 🧠 Agent Outputs")
+        planner_exp = st.expander("🧭 Planner Output", expanded=True)
+        exec_exp = st.expander("⚙️ Executor Output", expanded=False)
+        summ_exp = st.expander("📝 Summarizer Output", expanded=False)
+        reflect_exp = st.expander("💡 Reflection Output", expanded=False)
+        eval_exp = st.expander("📊 Evaluation", expanded=False)
 
-        # display outputs
-        animated_text(result["plan"], planner_text)
-        animated_text(result["execution"], exec_text)
-        animated_text(result["summary"], summ_text)
-        animated_text(result["reflection"], reflect_text)
-        eval_text.markdown(f"**Evaluation score:** {result['evaluation']['score']}\n\nComponents:\n```\n{json.dumps(result['evaluation']['components'], indent=2)}\n```")
+        with planner_exp:
+            planner_text = st.empty()
+        with exec_exp:
+            exec_text = st.empty()
+        with summ_exp:
+            summ_text = st.empty()
+        with reflect_exp:
+            reflect_text = st.empty()
+        with eval_exp:
+            eval_text = st.empty()
 
-        # update memory and LTM boxes
+    with col3:
+        st.markdown("## 📊 Observability & Memory")
+        logs_box = st.empty()
+        st.subheader("Session Memory")
+        mem_box = st.empty()
+        st.subheader("Long-Term Memory Snapshot")
+        ltm_box = st.empty()
+        st.subheader("Metrics")
+        metrics_box = st.empty()
+        st.markdown("---")
+        st.caption("A2A messages and cycle logs appear below.")
+
+    # prepare session logs
+    if "dp_logs" not in st.session_state:
+        st.session_state.dp_logs = []
+    if "last_run_time" not in st.session_state:
+        st.session_state.last_run_time = None
+
+    # Run pipeline when clicked
+    if run_btn:
+        # --- Sliding Step-by-Step Agent Animation ---
+        with st.status("🤖 Running Multi-Agent Pipeline...", expanded=True) as status:
+            st.write("🧭 Planner Agent starting...")
+            time.sleep(0.5)
+        
+            st.write("⚙️ Executor Agent starting...")
+            time.sleep(0.5)
+        
+            st.write("📝 Summarizer Agent preparing output...")
+            time.sleep(0.5)
+        
+            st.write("💡 Reflection Agent analyzing improvements...")
+            time.sleep(0.5)
+        
+            status.update(label="✨ All agents completed successfully!", state="complete")
+
+        st.session_state.last_run_time = now_ts()
+        st.session_state.dp_logs.clear()
+        try:
+            session_memory.set("preferred_wakeup", wake)
+            session_memory.set("work_style", style)
+            session_memory.set("profile", profile)
+            safe_log(st.session_state.dp_logs, "Main", f"Starting pipeline for profile={profile}, cycles={cycles}")
+
+            # Animated stepper UI
+            step_placeholder = st.empty()
+            step_placeholder.info("Step 1/4 — Planner running...")
+            time.sleep(0.4)
+
+            result = loop_orchestrator(user_input, cycles, st.session_state.dp_logs)
+
+            # show results with animated typing
+            step_placeholder.success("Planner ✓ Executor ✓ Summarizer ✓ Reflection ✓")
+            animated_text(result["plan"], planner_text)
+            animated_text(result["execution"], exec_text)
+            animated_text(result["summary"], summ_text)
+            # --- Text to Speech Output ---
+            try:
+                if GENAI_AVAILABLE and not FORCE_OFFLINE:
+                    tts_model = genai.GenerativeModel("gemini-pro")
+                    audio_data = tts_model.generate_content(
+                        f"Convert the following text to speech: {result['summary']}",
+                        audio=True,
+                    )
+                    st.audio(audio_data, format="audio/wav")
+            except:
+                st.warning("Text-to-speech unavailable in offline mode.")
+            animated_text(result["reflection"], reflect_text)
+            eval_text.markdown(f"**Evaluation score:** {result['evaluation']['score']}\n\nComponents:\n```\n{json.dumps(result['evaluation']['components'], indent=2)}\n```")
+
+            # Download button for final plan
+            st.download_button("📥 Download Final Plan", result["summary"], file_name="daypilot_plan.txt")
+
+            # Celebration if score above threshold
+            if result["evaluation"]["score"] >= 70:
+                st.balloons()
+
+            mem_box.json(session_memory.dump())
+            ltm_box.text(json.dumps(long_term_memory, indent=2)[:2000])
+            metrics_box.json(metrics)
+
+        except Exception as ex:
+            safe_log(st.session_state.dp_logs, "Main", f"Error: {ex}")
+            traceback.print_exc()
+            st.error("Agent pipeline failed. See logs.")
+        logs_box.text_area("Agent logs (newest last)", value="\n".join(st.session_state.dp_logs), height=350)
+
+    # show when not running
+    if not run_btn:
         mem_box.json(session_memory.dump())
-        ltm_box.text(json.dumps(long_term_memory, indent=2)[:2000])  # limit displayed chars
+        ltm_box.text(json.dumps(long_term_memory, indent=2)[:2000])
         metrics_box.json(metrics)
+        logs_box.text_area("Agent logs (newest last)", value="\n".join(st.session_state.dp_logs), height=350)
 
-    except Exception as ex:
-        safe_log(st.session_state.dp_logs, "Main", f"Error: {ex}")
-        traceback.print_exc()
-        st.error("Agent pipeline failed. See logs.")
-    # always update logs
-    logs_box.text_area("Agent logs (newest last)", value="\n".join(st.session_state.dp_logs), height=400)
+# Analytics tab
+with tabs[2]:
+    st.markdown("## 📈 Analytics & Visualization")
+    st.markdown("### Agent Network")
+    st.graphviz_chart(
+        '''
+        digraph {
+            User -> Planner;
+            Planner -> Executor;
+            Executor -> Summarizer;
+            Summarizer -> Reflection;
+            Reflection -> User;
+        }
+        '''
+    )
+    st.markdown("### Metrics")
+    st.json(metrics)
+    st.markdown("### Recent Logs")
+    st.code("\n".join(st.session_state.get("dp_logs", [])[-20:]))
 
-# display memory & logs when not running
-if not run_btn:
-    mem_box.json(session_memory.dump())
-    ltm_box.text(json.dumps(long_term_memory, indent=2)[:2000])
-    metrics_box.json(metrics)
-    logs_box.text_area("Agent logs (newest last)", value="\n".join(st.session_state.dp_logs), height=400)
+# Memory tab
+with tabs[3]:
+    st.markdown("## 🧠 Memory Inspector")
+    st.markdown("### Session Memory")
+    st.json(session_memory.dump())
+    st.markdown("### Long-Term Memory (sample)")
+    st.text(json.dumps(long_term_memory, indent=2)[:5000])
+    if st.button("Export Long-Term Memory"):
+        st.download_button("Export LTM JSON", json.dumps(long_term_memory, indent=2), file_name="long_term_memory.json")
 
-# Display small "how to demo" & notes
+# Footer & demo tips
 st.markdown("---")
 st.markdown("### Demo tips")
 st.markdown(
-    "- Save preferences and run a few cycles (2-3) to show loop behavior.\n"
-    "- Open expanders to show each agent output.\n"
-    "- Show logs and A2A messages to demonstrate agent orchestration.\n"
-    "- Toggle `OFFLINE_MODE` in Streamlit secrets to demo fallback behavior."
+    "- Save preferences and run 2–3 cycles for best refinement.\n"
+    "- Use the quick templates on the Home tab to load sample prompts.\n"
+    "- Use the Download button to get the final plan as a text file.\n"
+    "- Toggle OFFLINE_MODE in Streamlit secrets to demo fallback behavior."
 )
 
-st.caption("Developed for Google AI Agents Intensive — Enhanced capstone demo.")
+st.markdown("""
+<hr>
+<center>
+Built with ❤️ by Sai Meghana for Google’s AI Intensive.<br>
+<small>Powered by Gemini + Streamlit.</small>
+</center>
+""", unsafe_allow_html=True)
