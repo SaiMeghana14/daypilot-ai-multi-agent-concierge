@@ -393,6 +393,9 @@ with tabs[0]:
             st.rerun()
     else:
         st.success("You're ready — open the Agents tab and run the pipeline.")
+        if st.button("↩️ Show onboarding again"):
+            st.session_state.show_intro = True
+            st.rerun()
 
 # Agents tab: main app (inputs + agents)
 with tabs[1]:
