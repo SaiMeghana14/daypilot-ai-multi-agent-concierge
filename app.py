@@ -91,7 +91,16 @@ render_header()
 
 # Theme toggle and badges
 mode = theme_toggle()
-show_badges(session_memory.get("profile"), PREFERRED_MODEL, FORCE_OFFLINE)
+# Prepare values for badges
+profile_label = session_memory.get("profile", "Unknown") or "Unknown"
+
+model_label = (
+    PREFERRED_MODEL.replace("/", "_")
+                  .replace("-", "_")
+                  .replace(" ", "_")
+                  if PREFERRED_MODEL else "Unknown"
+)
+show_badges(profile_label, model_label, FORCE_OFFLINE)
 
 long_term_memory = load_long_term_memory()  # dict persisted to disk
 
