@@ -11,16 +11,6 @@ from ui_style import render_header, theme_toggle, show_badges, icons, animated_t
 
 import streamlit as st
 
-# Optional lottie support (graceful fallback)
-try:
-    def load_lottie_json(path: str):
-        import json
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-except Exception:
-    st_lottie = None
-    LOTTIE_AVAILABLE = False
-
 # Try to import google.generativeai but don't crash if unavailable
 try:
     import google.generativeai as genai  # type: ignore
@@ -365,14 +355,6 @@ with tabs[0]:
             "A multi-agent personal concierge that plans productive days. "
             "It demonstrates Planner, Executor, Summarizer, Reflection agents, loop refinement, tools, and memory."
         )
-        # Lottie (optional)
-        if LOTTIE_AVAILABLE:
-            try:
-                welcome_anim = load_lottie("lotties/welcome.json")  
-                if welcome_anim:
-                    st_lottie(welcome_anim, height=200, key="welcome")
-            except Exception:
-                pass
         st.markdown("### Quick-start templates")
         col_a, col_b, col_c, col_d, col_e = st.columns(5)
         if "user_template" not in st.session_state:
