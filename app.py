@@ -425,10 +425,15 @@ with tabs[1]:
         # Load saved profile (persistent)
         saved_profile = session_memory.get("profile", "Student")
         
+        # Ensure saved value is valid; else fallback to "Student"
+        profiles = ["Student", "Developer", "Researcher", "Designer"]
+        if saved_profile not in profiles:
+            saved_profile = "Student"
+        
         profile = st.selectbox(
             "Profile",
-            options=["Student", "Developer", "Researcher", "Designer"],
-            index=["Student", "Developer", "Researcher", "Designer"].index(saved_profile)
+            options=profiles,
+            index=profiles.index(saved_profile)
         )
         
         # Avatar icons
@@ -441,15 +446,22 @@ with tabs[1]:
         
         st.markdown(f"### {avatars.get(profile, '🙂')} {profile} Mode Activated")
         
-        # Wakeup time (loaded from persistent memory)
-        wake = st.text_input("Preferred wakeup time", value=session_memory.get("preferred_wakeup", ""))
+        # Wakeup
+        wake = st.text_input(
+            "Preferred wakeup time",
+            value=session_memory.get("preferred_wakeup", "")
+        )
         
-        # Work style (loaded from memory)
+        # Work style
+        styles = ["Pomodoro", "Continuous", "Custom"]
         saved_style = session_memory.get("work_style", "Pomodoro")
+        if saved_style not in styles:
+            saved_style = "Pomodoro"
+        
         style = st.selectbox(
             "Work style",
-            options=["Pomodoro", "Continuous", "Custom"],
-            index=["Pomodoro", "Continuous", "Custom"].index(saved_style)
+            options=styles,
+            index=styles.index(saved_style)
         )
         
         # Loop cycles
