@@ -383,10 +383,10 @@ with tabs[0]:
         with col_c:
             if st.button("🛠️ Project Work"):
                 st.session_state.user_template = "I need a 5-hour schedule to develop a small IoT prototype and test it."
-         with col_d:
+        with col_d:
             if st.button("👩🏻‍💻 Coding Bootcamp"):
                 st.session_state.user_template = "Give me a 5-hour coding bootcamp plan."
-         with col_e:
+        with col_e:
             if st.button("🎯 Hackathon Prep"):
                 st.session_state.user_template = "Help me prepare for a hackathon in 4 hours."
         st.markdown("---")
