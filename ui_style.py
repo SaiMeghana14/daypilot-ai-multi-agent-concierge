@@ -39,14 +39,34 @@ def theme_toggle():
 # Markdown Badges
 # =============================
 def show_badges(profile, model, offline):
+    # fallback values
+    profile = profile or "Unknown"
+    model = model or "Unknown"
+
+    # sanitize for shields.io
+    def clean(val):
+        return str(val).replace(" ", "_").replace("-", "_").replace("/", "_")
+
+    profile_clean = clean(profile)
+    model_clean = clean(model)
+
+    # generate badge URLs
+    profile_badge = f"https://img.shields.io/badge/{profile_clean}-blue"
+    model_badge = f"https://img.shields.io/badge/{model_clean}-purple"
+    mode_badge = f"https://img.shields.io/badge/Mode-{'Offline' if offline else 'Online'}-{'red' if offline else 'green'}"
+    status_badge = "https://img.shields.io/badge/Status-Active-brightgreen"
+
     st.markdown(
         f"""
-        **Profile:** ![](https://img.shields.io/badge/Profile-{profile}-blue)
-        &nbsp;&nbsp; **Model:** ![](https://img.shields.io/badge/LLM-{model}-purple)
-        &nbsp;&nbsp; **Mode:** ![](https://img.shields.io/badge/Mode-{'Offline' if offline else 'Online'}-{'red' if offline else 'green'})
-        &nbsp;&nbsp; **Status:** ![](https://img.shields.io/badge/Status-Active-brightgreen)
+        **Profile:** ![]({profile_badge})
+        &nbsp;&nbsp;
+        **Model:** ![]({model_badge})
+        &nbsp;&nbsp;
+        **Mode:** ![]({mode_badge})
+        &nbsp;&nbsp;
+        **Status:** ![]({status_badge})
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
 
 # =============================
