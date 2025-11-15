@@ -336,7 +336,7 @@ with st.sidebar:
     if st.button("🔄 Reset App (clear session)"):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
-        st.experimental_rerun()
+        st.rerun()
     st.markdown("---")
     st.markdown("## ⚙️ Quick Controls")
     if st.button("🎯 Example: Study 6h (AI + IoT)"):
