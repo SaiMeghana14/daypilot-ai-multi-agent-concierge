@@ -20,16 +20,6 @@ except Exception:
 # ---------- Config & Secrets ----------
 st.set_page_config(page_title="DayPilot AI — Enhanced Multi-Agent Concierge", layout="wide")
 
-# Apply UI styling (CSS + Header + Theme)
-inject_css()
-render_header()
-
-# Theme toggle must come early
-mode = theme_toggle()
-
-# Show badges (profile, model, mode)
-show_badges(session_memory.get("profile"), PREFERRED_MODEL, FORCE_OFFLINE)
-
 SECRETS = st.secrets if hasattr(st, "secrets") else {}
 API_KEY = SECRETS.get("GOOGLE_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
 PREFERRED_MODEL = SECRETS.get("LLM_MODEL", "gemini-pro") or os.getenv("LLM_MODEL", "gemini-pro")
@@ -82,6 +72,17 @@ class SessionMemory:
         return dict(self.store)
 
 session_memory = SessionMemory()
+
+# Apply UI styling (CSS + Header + Theme)
+inject_css()
+render_header()
+
+# Theme toggle must come early
+mode = theme_toggle()
+
+# Show badges (profile, model, mode)
+show_badges(session_memory.get("profile"), PREFERRED_MODEL, FORCE_OFFLINE)
+
 long_term_memory = load_long_term_memory()  # dict persisted to disk
 
 # ---------- Observability metrics ----------
