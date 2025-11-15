@@ -92,7 +92,10 @@ render_header()
 # Theme toggle and badges
 mode = theme_toggle()
 # Prepare values for badges
-profile_label = session_memory.get("profile", "Unknown") or "Unknown"
+profile_label = session_memory.get("profile")
+
+if not profile_label or profile_label.strip() == "":
+    profile_label = "Student"   
 
 model_label = (
     PREFERRED_MODEL.replace("/", "_")
