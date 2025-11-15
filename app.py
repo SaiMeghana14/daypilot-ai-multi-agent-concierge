@@ -14,9 +14,9 @@ import streamlit as st
 # Optional lottie support (graceful fallback)
 try:
     def load_lottie_json(path: str):
-    import json
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        import json
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
 except Exception:
     st_lottie = None
     LOTTIE_AVAILABLE = False
