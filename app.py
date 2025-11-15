@@ -14,11 +14,10 @@ except Exception:
     genai = None
     GENAI_AVAILABLE = False
 
-# ---------- Load env ----------
-load_dotenv()
-API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
-PREFERRED_MODEL = os.getenv("LLM_MODEL", "gemini-pro").strip()
-FORCE_OFFLINE = os.getenv("OFFLINE_MODE", "false").lower() == "true"
+# ---------- Load secrets ----------
+API_KEY = st.secrets.get("GOOGLE_API_KEY", "")
+PREFERRED_MODEL = st.secrets.get("LLM_MODEL", "gemini-pro")
+FORCE_OFFLINE = str(st.secrets.get("OFFLINE_MODE", "false")).lower() == "true"
 
 # ---------- App config ----------
 st.set_page_config(page_title="DayPilot AI — Multi-Agent Concierge", layout="wide")
